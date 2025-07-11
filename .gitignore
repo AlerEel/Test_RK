@@ -1,0 +1,29 @@
+# Виртуальное окружение
+.venv/
+venv/
+env/
+
+# Конфигурационные файлы с паролями
+config.py
+
+# Кэш Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Логи
+*.log
+
+# Временные файлы
+*.tmp
+*.temp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Системные файлы
+.DS_Store
+Thumbs.db 
