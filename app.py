@@ -1,9 +1,15 @@
 from flask import Flask, render_template, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_paginate import Pagination, get_page_args
+import os
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:postgres@localhost/Test_RK'
+
+# Конфигурация базы данных с поддержкой переменных окружения
+database_url = os.environ.get('DATABASE_URL', 'postgresql://postgres:postgres@localhost/Test_RK')
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 db = SQLAlchemy(app)
 
 class Inspections(db.Model):
@@ -31,4 +37,4 @@ def index():
     return render_template('index.html', checks=inspections, pagination=pagination)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False, host='0.0.0.0', port=5000)

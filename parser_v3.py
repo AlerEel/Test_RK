@@ -4,18 +4,33 @@ from datetime import datetime, timedelta
 import time
 import uuid
 
+"""
+Парсер для получения данных о проверках с API Госуслуг
+Автоматически запрашивает данные за последний месяц (30 дней)
+"""
+
 # Функция для получения данных с реестра
 def fetch_inspections(page=1):
+    # Рассчитываем даты за последний месяц
+    now = datetime.now()
+    one_month_ago = now - timedelta(days=30)
+    
+    # Форматируем даты в ISO 8601 формат с UTC
+    exam_start_from = one_month_ago.strftime('%Y-%m-%dT21:00:00.000Z')
+    exam_start_to = now.strftime('%Y-%m-%dT21:00:00.000Z')
+    
+    print(f"Запрашиваем данные с {exam_start_from} по {exam_start_to}")
+    
     url = "https://dom.gosuslugi.ru/inspection/api/rest/services/examinations/public/search"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
         'Content-Type': 'application/json',
         'Referer': 'https://dom.gosuslugi.ru/',
         'Origin': 'https://dom.gosuslugi.ru',
-        'Session-GUID': '48904512-7e68-446b-b37e-d5f894a3c23c',  # <-- вставьте актуальный из браузера
-        'State-GUID': '/rp',      # <-- вставьте актуальный из браузера
-        'Request-GUID': str(uuid.uuid4()),   # генерируется автоматически
-        'Cookie': 'JSESSIONID="pqzqZ6AtZ6QNFdf3fYa_nZeLe2m1DuB8SLqX9Htv.ppak-app-wf-ui-srv04:rest"; userSelectedLanguage=ru; nau=e443c74d-8315-d6d1-4679-3d01696a1f0f; _ym_uid=1747825891223188734; _ym_d=1747825891; _idp_authn_id=email%3Adom.gosuslugi.ru@roskvartal.ru; _ym_isad=2; suimSessionGuid=48904512-7e68-446b-b37e-d5f894a3c23c; route_rest=c534c9649dd9079a562a354c7548548d; route_pafo-reports=6b1d75b53760d2e77f53d6f8401f3118; route_suim=fd7af85ab1486fdca90b4bd5fc38e102'             # <-- скопируйте все cookies одной строкой из браузера
+        'Session-GUID': '48904512-7e68-446b-b37e-d5f894a3c23c', 
+        'State-GUID': '/rp',      
+        'Request-GUID': str(uuid.uuid4()),   
+        'Cookie': 'JSESSIONID="aC86k3wh4G4mbB0fl5zVi6LNIGTNo4P2KrjVrkWS.ppak-app-wf-ui-srv04:rest"; userSelectedLanguage=ru; nau=e443c74d-8315-d6d1-4679-3d01696a1f0f; _ym_uid=1747825891223188734; _ym_d=1747825891; _idp_authn_id=email%3Adom.gosuslugi.ru@roskvartal.ru; suimSessionGuid=48904512-7e68-446b-b37e-d5f894a3c23c; route_rest=c534c9649dd9079a562a354c7548548d; route_pafo-reports=6b1d75b53760d2e77f53d6f8401f3118; route_suim=fd7af85ab1486fdca90b4bd5fc38e102; route_pafo-saiku=6b1d75b53760d2e77f53d6f8401f3118; _ym_isad=2; _ym_visorc=w'             
     }
     params = {
         'page': page,
@@ -24,8 +39,8 @@ def fetch_inspections(page=1):
     payload = {
         "numberOrUriNumber": None,
         "typeList": [],
-        "examStartFrom": "2025-06-11T21:00:00.000Z",
-        "examStartTo": "2025-07-11T21:00:00.000Z",
+        "examStartFrom": exam_start_from,
+        "examStartTo": exam_start_to,
         "formList": [],
         "hasOffences": [],
         "isAssigned": None,
@@ -115,6 +130,7 @@ def format_result(item):
 
 # Фильтрация данных за последний месяц
 def filter_last_month(data):
+    # Используем тот же период, что и в запросе к API
     one_month_ago = datetime.now() - timedelta(days=30)
     filtered = []
     for item in data.get('items', []):
@@ -142,9 +158,20 @@ def filter_last_month(data):
 
 # Сохранение данных в JSON-файл
 def save_to_json(data, filename='inspections.json'):
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    print(f"Данные сохранены в {filename}")
+    try:
+        # Пытаемся сохранить в текущую директорию
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print(f"Данные сохранены в {filename}")
+    except OSError as e:
+        # Если не удается сохранить в текущую директорию, пробуем в /tmp
+        if "Read-only file system" in str(e):
+            temp_filename = f"/tmp/{filename}"
+            with open(temp_filename, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"Данные сохранены в {temp_filename} (временная директория)")
+        else:
+            raise e
 
 # Основной процесс с поддержкой пагинации
 def main():
