@@ -20,6 +20,7 @@ class Inspections(db.Model):
     purpose = db.Column(db.Text)
     status = db.Column(db.String(100))
     result = db.Column(db.Text)
+    inspection_date = db.Column(db.String)  # добавлено поле для даты проверки
 
 @app.route('/')
 def index():

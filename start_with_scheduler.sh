@@ -1,17 +1,17 @@
 #!/bin/bash
+set -e  # Скрипт завершится при любой ошибке
 
 echo "Ожидание запуска PostgreSQL..."
 sleep 15
 
-echo "Запуск планировщика в фоновом режиме..."
-python scheduler.py &
-SCHEDULER_PID=$!
+echo "Запуск парсера..."
+python parser_v3.py
 
-echo "Инициализация базы данных..."
+echo "Загрузка данных в базу..."
 python init_db.py
 
 echo "Запуск Flask приложения..."
-python app.py
+python app.py &
 
-# Если Flask приложение завершится, остановим планировщик
-kill $SCHEDULER_PID 
+echo "Запуск планировщика..."
+python scheduler.py 

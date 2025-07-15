@@ -28,7 +28,7 @@ def update_data():
         
         # Очищаем базу данных и загружаем новые данные
         print("Обновление базы данных...")
-        result = subprocess.run([sys.executable, "init_db.py", "--force"], 
+        result = subprocess.run([sys.executable, "init_db.py"], 
                               capture_output=True, text=True, timeout=60)
         
         # Если файл был сохранен в /tmp, копируем его в основную директорию
