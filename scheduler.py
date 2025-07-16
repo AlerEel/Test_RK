@@ -12,7 +12,16 @@ from datetime import datetime
 import logging
 
 def run_parser_and_update_db():
-    logging.info("Запуск парсера...")
+    logging.info("Получение заголовков через parser.py...")
+    headers_result = subprocess.run([sys.executable, "parser.py"], capture_output=True, text=True)
+    if headers_result.returncode == 0:
+        logging.info("Заголовки успешно получены")
+        logging.info(headers_result.stdout)
+    else:
+        logging.error(f"Ошибка получения заголовков: {headers_result.stderr}")
+        return
+    
+    logging.info("Запуск парсера данных...")
     result = subprocess.run([sys.executable, "parser_v3.py"], capture_output=True, text=True)
     if result.returncode == 0:
         logging.info("Парсер успешно завершил работу")
@@ -20,6 +29,7 @@ def run_parser_and_update_db():
     else:
         logging.error(f"Ошибка в парсере: {result.stderr}")
         return
+    
     logging.info("Обновление базы данных...")
     db_result = subprocess.run([sys.executable, "init_db.py"], capture_output=True, text=True)
     if db_result.returncode == 0:

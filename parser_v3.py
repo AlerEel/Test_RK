@@ -3,15 +3,14 @@ import json
 from datetime import datetime, timedelta
 import time
 import uuid
-from cookie_manager import CookieManager
 
 """
 Парсер для получения данных о проверках с API Госуслуг
 Автоматически запрашивает данные за последний месяц (30 дней)
-С автоматическим получением cookies
+Использует реальные заголовки, полученные через parser.py (real_headers.json)
 """
 
-def fetch_inspections(page=1, cookie_manager=None):
+def fetch_inspections(page=1):
     # Рассчитываем даты за последний месяц
     now = datetime.now()
     one_month_ago = now - timedelta(days=30)
@@ -20,9 +19,9 @@ def fetch_inspections(page=1, cookie_manager=None):
     exam_start_from = one_month_ago.strftime('%Y-%m-%dT21:00:00.000Z')
     exam_start_to = now.strftime('%Y-%m-%dT21:00:00.000Z')
     
-    print(f"Запрашиваем данные с {exam_start_from} по {exam_start_to}")
+    print(f"[INFO] Страница {page}: запрашиваем данные с {exam_start_from} по {exam_start_to}")
     
-    url = "https://dom.gosuslugi.ru/inspection/api/rest/services/examinations/public/search "
+    url = "https://dom.gosuslugi.ru/inspection/api/rest/services/examinations/public/search"
 
     params = {
         'page': page,
@@ -43,67 +42,57 @@ def fetch_inspections(page=1, cookie_manager=None):
         "typeList": []
     }
 
-    if cookie_manager is None:
-        print("Не передан cookie_manager — невозможно выполнить запрос")
+    try:
+        with open("real_headers.json", encoding="utf-8") as f:
+            real_headers = json.load(f)
+        # Обновляем Request-GUID для каждого запроса
+        real_headers["Request-GUID"] = str(uuid.uuid4())
+        print(f"[INFO] Заголовки успешно загружены из real_headers.json")
+    except Exception as e:
+        print(f"[ERROR] Не удалось загрузить real_headers.json: {e}")
         return None
-
-    # Принудительно обновляем cookies
-    cookie_string, cookies_dict = cookie_manager.get_fresh_cookies(force_refresh=True)
-
-    if not cookie_string:
-        print("Не удалось получить свежие cookies — запрос не будет выполнен")
-        return None
-
-    headers = cookie_manager.generate_headers(cookie_string)
 
     try:
-        response = requests.post(url, headers=headers, params=params, json=payload)
+        response = requests.post(url, headers=real_headers, params=params, json=payload)
+        print(f"[INFO] POST {url} — статус: {response.status_code}")
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
-        print(f"Ошибка при выполнении запроса: {e}")
+        print(f"[ERROR] Ошибка при выполнении запроса: {e}")
         return None
 
 def format_status(item):
     status = item.get('status', '')
     is_assigned = item.get('isAssigned', False)
-    # Если статус "FINISHED", проверяем значение isAssigned
     if status == "FINISHED":
         if is_assigned:
             return "Назначено"
         else:
             return "Завершено"
-    # Статусы по маппингу
     status_map = {
         "CANCELLED": "Отменена",
         "PLANNED": "Запланирована"
     }
     result_status = status_map.get(status, status)
-    # Проверяем изменение статуса и дату последнего редактирования
     change_info = item.get('examinationChangeInfo')
     last_edit = item.get('lastEditingDate')
-
     if change_info:
-        reason = change_info.get('changingBase', {}).get('name', '')  # основание изменения
+        reason = change_info.get('changingBase', {}).get('name', '')
     else:
         reason = ''
-
     if last_edit:
         dt = datetime.fromtimestamp(last_edit / 1000)
         last_edit_str = dt.strftime('%d.%m.%Y %H:%M')
     else:
         last_edit_str = ''
-
     if reason or last_edit_str:
         additional_info = f". Изменено. Основание: {reason} Последнее изменение: {last_edit_str}"
         result_status += additional_info
-
     return result_status
 
 def format_result(item):
     result = (item.get('examinationResult') or {}).get('desc')
     has_offence = False
-    # Вложенность: examinationResult.hasOffence или просто hasOffence на верхнем уровне
     if item.get('examinationResult') and 'hasOffence' in item['examinationResult']:
         has_offence = item['examinationResult']['hasOffence']
     elif 'hasOffence' in item:
@@ -114,7 +103,21 @@ def format_result(item):
         return "Нарушений не выявлено"
     return result or ""
 
-
+def process_inspection_item(item):
+    """Обработка одного элемента проверки"""
+    # Извлекаем данные из вложенной структуры с проверками на None
+    subject = item.get('subject', {})
+    organization_info = subject.get('organizationInfoEnriched', {}) if subject else {}
+    registry_info = organization_info.get('registryOrganizationCommonDetailWithNsi', {}) if organization_info else {}
+    
+    return {
+        'entity_name': registry_info.get('fullName', ''),
+        'ogrn': registry_info.get('ogrn', ''),
+        'purpose': item.get('examObjective', ''),
+        'status': format_status(item),
+        'result': format_result(item),
+        'examStartDate': item.get('from', '')
+    }
 
 # Сохранение данных в JSON-файл
 def save_to_json(data, filename='inspections.json'):
@@ -124,21 +127,28 @@ def save_to_json(data, filename='inspections.json'):
 
 # Основной процесс с поддержкой пагинации
 def main():
-    print("Инициализация менеджера cookies...")
-    cookie_manager = CookieManager()
-    
+    print("[INFO] Запуск парсера Госуслуг...")
     all_inspections = []
     page = 1
     while True:
-        data = fetch_inspections(page, cookie_manager)
-        if not data or not data.get('items'):  # Если данных нет, завершаем
+        data = fetch_inspections(page)
+        if not data or not data.get('items'):
+            print(f"[INFO] Данные закончились или не получены на странице {page}.")
             break
-        #filtered_data = filter_all(data)
-        all_inspections.extend(data)
+        print(f"[INFO] Получено {len(data['items'])} записей на странице {page}.")
+        
+        # Обрабатываем каждый элемент
+        processed_items = []
+        for item in data['items']:
+            processed_item = process_inspection_item(item)
+            processed_items.append(processed_item)
+        
+        all_inspections.extend(processed_items)
+        print(f"[INFO] Обработано {len(processed_items)} записей на странице {page}.")
         page += 1
-        time.sleep(1)  # Пауза для избежания блокировки
+        time.sleep(1)
     save_to_json(all_inspections)
-    print(f"Обработано и сохранено {len(all_inspections)} записей")
+    print(f"[INFO] Обработано и сохранено {len(all_inspections)} записей в inspections.json")
 
 if __name__ == "__main__":
     main() 

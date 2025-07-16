@@ -1,0 +1,10 @@
+{
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/138.0.0.0 Safari/537.36",
+  "Content-Type": "application/json",
+  "Referer": "https://dom.gosuslugi.ru/",
+  "Origin": "https://dom.gosuslugi.ru",
+  "Session-GUID": "abe2bb07-8136-4274-8782-a2d6edb32c3d",
+  "State-GUID": "/rp",
+  "Request-GUID": "a61b1b11-5423-4fe7-9c37-6cdc8a777b19",
+  "Cookie": "_ym_uid=1752642601736448018; _ym_d=1752642601; route_pafo-saiku=556a4a2efb068de42589cb59800e7dea; suimSessionGuid=abe2bb07-8136-4274-8782-a2d6edb32c3d; route_rest=4141be864391716b37d3da7a161548a9; _ym_isad=2; route_pafo-reports=556a4a2efb068de42589cb59800e7dea; _ym_visorc=w; route_suim=fd7af85ab1486fdca90b4bd5fc38e102"
+}
