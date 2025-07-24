@@ -146,14 +146,16 @@ class BaseAPIParser(ABC):
                 processed_items = []
                 for item in items:
                     if not isinstance(item, dict):
-                        logger.warning(f"Пропущен несловарный элемент: {item!r}")
                         continue
                     try:
                         processed = self.process_item(item)
                         processed_items.append(processed)
-                    except Exception as e:
-                        logger.warning(f"Ошибка при обработке элемента: {e}")
+                    except Exception:
                         continue
+                if skipped_count > 0:
+                    logger.warning(f"Пропущено несловарных элементов: {skipped_count}")
+                    if skipped_examples:
+                        logger.warning(f"Примеры пропущенных: {skipped_examples}")
 
                 all_data.extend(processed_items)
                 logger.info(f"Обработано {len(processed_items)} записей.")

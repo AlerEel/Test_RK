@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Результаты проверок</title>
+  <!-- Подключение Bootstrap -->
+  <link href="/static/bootstrap.min.css" rel="stylesheet">
+  <style>
+    /* Стили для карточек */
+    .inspection-card {
+      border: none;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(80, 112, 255, 0.10);
+      transition: transform 0.2s, box-shadow 0.2s;
+      background: #fff;
+      min-height: 220px;
+      margin-bottom: 16px;
+    }
+    .inspection-card:hover {
+      transform: translateY(-4px) scale(1.01);
+      box-shadow: 0 8px 32px rgba(80, 112, 255, 0.18);
+      background: #f8fafc;
+    }
+    .card-title {
+      color: #2563eb;
+      font-weight: 700;
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+    .card-text strong {
+      color: #6366f1;
+    }
+    /* Цвета для статусов */
+    .status-success {
+      color: #22c55e;
+      font-weight: 600;
+    }
+    .status-warning {
+      color: #f59e42;
+      font-weight: 600;
+    }
+    .status-danger {
+      color: #ef4444;
+      font-weight: 600;
+    }
+    /* Цвет для результата */
+    .result-positive {
+      color: #2563eb;
+      font-weight: 600;
+    }
+    .result-negative {
+      color: #b91c1c;
+      font-weight: 600;
+    }
+    .result-neutral {
+      color: #64748b;
+      font-weight: 600;
+    }
+    /* Фон страницы */
+    body {
+      background: linear-gradient(120deg, #f1f5f9 60%, #e0e7ff 100%);
+    }
+    /* Заголовок */
+    h1 {
+      color: #1e293b;
+      letter-spacing: 1px;
+      font-weight: 800;
+      font-size: 2.2rem;
+      margin-bottom: 2rem;
+    }
+    /* Пагинация */
+    .pagination {
+      margin-top: 24px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(80, 112, 255, 0.07);
+      padding: 8px 16px;
+      display: inline-flex;
+    }
+    .pagination .page-item .page-link {
+      color: #2563eb;
+      border: none;
+      background: transparent;
+      font-weight: 600;
+      transition: background 0.2s, color 0.2s;
+    }
+    .pagination .page-item.active .page-link,
+    .pagination .page-item .page-link:hover {
+      background: #e0e7ff;
+      color: #1e293b;
+      border-radius: 8px;
+    }
+    .pagination .page-item.disabled .page-link {
+      color: #bdbdbd;
+      background: transparent;
+    }
+    /* Убираем маркеры у пагинации */
+    .pagination {
+      list-style: none;
+    }
+    /* Контейнер для пагинации */
+    .pagination-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-top: 32px;
+    }
+    .pagination .page-item {
+      margin: 0 4px;
+    }
+    .pagination .page-link {
+      min-width: 44px;
+      min-height: 38px;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      padding: 6px 16px;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .pagination .page-item.active .page-link {
+      background: #2563eb;
+      color: #fff;
+      font-weight: 700;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(80, 112, 255, 0.13);
+    }
+    .pagination .page-link:focus {
+      outline: 2px solid #2563eb;
+      outline-offset: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container mt-5">
+    <h1 class="text-center mb-4">Результаты проверок</h1>
+
+    <!-- Карточки с результатами -->
+    <div class="row row-cols-1 g-4">
+      {% for row in rows %}
+        <div class="col">
+          <div class="card inspection-card h-100">
+            <div class="card-body">
+              <h5 class="card-title">{{ row.entity_name }}</h5>
+              <p class="card-text"><strong>ОГРН:</strong> {{ row.ogrn }}</p>
+              <p class="card-text"><strong>Цель:</strong> {{ row.purpose }}</p>
+              {% set status_class = 'success' if 'Завершена' in row.status else 'warning' if 'Назначена' in row.status else 'danger' %}
+              <p class="card-text"><strong>Статус:</strong> <span class="status-{{ status_class }}">{{ row.status }}</span></p>
+              {% set result_class = 'result-positive' if 'выявлено' in row.result|lower else 'result-neutral' if row.result == '' else 'result-negative' %}
+              <p class="card-text"><strong>Результат:</strong> <span class="{{ result_class }}">{{ row.result }}</span></p>
+              <p class="card-text"><strong>Дата начала:</strong> {{ row.examStartDate }}</p>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+      {% if rows|length == 0 %}
+        <div class="col">
+          <div class="alert alert-warning text-center">Ничего не найдено по вашему запросу.</div>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Пагинация -->
+    <div class="pagination-container">
+      <ul class="pagination">
+        {% if page > 1 %}
+          <li class="page-item"><a class="page-link" href="?page=1{% if request.query_params.get('q') %}&q={{ request.query_params.get('q') }}{% endif %}" aria-label="Первая страница">&laquo; Первая</a></li>
+          <li class="page-item"><a class="page-link" href="?page={{ page-1 }}{% if request.query_params.get('q') %}&q={{ request.query_params.get('q') }}{% endif %}" aria-label="Назад">&lt; Назад</a></li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">&laquo; Первая</span></li>
+          <li class="page-item disabled"><span class="page-link">&lt; Назад</span></li>
+        {% endif %}
+        <li class="page-item active"><span class="page-link">{{ page }}</span></li>
+        {% if page < total_pages %}
+          <li class="page-item"><a class="page-link" href="?page={{ page+1 }}{% if request.query_params.get('q') %}&q={{ request.query_params.get('q') }}{% endif %}" aria-label="Вперёд">Вперёд &gt;</a></li>
+          <li class="page-item"><a class="page-link" href="?page={{ total_pages }}{% if request.query_params.get('q') %}&q={{ request.query_params.get('q') }}{% endif %}" aria-label="Последняя страница">Последняя &raquo;</a></li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Вперёд &gt;</span></li>
+          <li class="page-item disabled"><span class="page-link">Последняя &raquo;</span></li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+
+  <!-- Подключение JavaScript Bootstrap -->
+  <script src="/static/bootstrap.bundle.min.js"></script>
+</body>
+</html> 
