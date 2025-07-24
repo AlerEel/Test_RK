@@ -145,9 +145,6 @@ class BaseAPIParser(ABC):
 
                 processed_items = []
                 for item in items:
-                    if not isinstance(item, dict):
-                        logger.warning(f"Пропущен несловарный элемент: {item!r}")
-                        continue
                     try:
                         processed = self.process_item(item)
                         processed_items.append(processed)
@@ -257,15 +254,15 @@ class GosuslugiInspectionsParser(BaseAPIParser):
             return "Нарушений не выявлено"
         return result
 
-    def process_item(self, item: Dict[str, Any]) -> Dict[str, Any]:  # ← Вот он! Правильное имя
-        subject = item.get('subject') or {}
-        org_info = subject.get('organizationInfoEnriched') or {}
-        registry = org_info.get('registryOrganizationCommonDetailWithNsi') or {}
+    def process_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        subject = item.get('subject', {}) or {}
+        org_info = subject.get('organizationInfoEnriched', {}) if subject else {}
+        registry = org_info.get('registryOrganizationCommonDetailWithNsi', {}) if org_info else {}
 
         return {
-            'entity_name': (registry.get('shortName') or '').strip(),
-            'ogrn': (registry.get('ogrn') or '').strip(),
-            'purpose': (item.get('examObjective') or '').strip(),
+            'entity_name': registry.get('shortName', ''),
+            'ogrn': registry.get('ogrn', ''),
+            'purpose': item.get('examObjective', ''),
             'status': self.format_status(item),
             'result': self.format_result(item),
             'examStartDate': item.get('from', '')
