@@ -11,10 +11,6 @@ import os
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
-# Добавляем путь для импорта parser_v2
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from parser_v2 import main as run_parser_v2
-
 
 class BaseExtractor(ABC):
     """
@@ -161,6 +157,7 @@ def main():
         print("💡 Передача данных в parser_v2.py...")
         
         # Передаём только заголовки в parser_v2
+        from scripts.inspections_parser import main as run_parser_v2
         run_parser_v2(result["headers"])
         
     else:

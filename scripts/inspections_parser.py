@@ -1,4 +1,4 @@
-# parser_v2.py — ФИНАЛЬНАЯ РАБОЧАЯ ВЕРСИЯ
+# inspections_parser.py — ФИНАЛЬНАЯ РАБОЧАЯ ВЕРСИЯ
 
 import requests
 import json
@@ -13,6 +13,8 @@ from typing import Dict, List, Any, Optional
 # Настройка логгирования
 import logging
 logger = logging.getLogger(__name__)
+
+from scripts.load_to_sqlite import SqliteLoader
 
 
 class BaseAPIParser(ABC):
@@ -144,13 +146,19 @@ class BaseAPIParser(ABC):
                 logger.info(f"Получено {len(items)} записей на странице {page}.")
 
                 processed_items = []
+                skipped_count = 0
+                skipped_examples = []
                 for item in items:
                     if not isinstance(item, dict):
+                        skipped_count += 1
+                        if len(skipped_examples) < 5:
+                            skipped_examples.append(repr(item))
                         continue
                     try:
                         processed = self.process_item(item)
                         processed_items.append(processed)
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(f"Ошибка при обработке элемента: {e} | item: {repr(item)}")
                         continue
                 if skipped_count > 0:
                     logger.warning(f"Пропущено несловарных элементов: {skipped_count}")
@@ -182,6 +190,9 @@ class BaseAPIParser(ABC):
                 continue
 
         return all_data
+
+    def safe_get(self, d, key, default=''):
+        return d[key] if isinstance(d, dict) and key in d else default
 
 
 class GosuslugiInspectionsParser(BaseAPIParser):
@@ -218,8 +229,8 @@ class GosuslugiInspectionsParser(BaseAPIParser):
         }
 
     def format_status(self, item: Dict[str, Any]) -> str:
-        status = item.get('status', '')
-        is_assigned = item.get('isAssigned', False)
+        status = self.safe_get(item, 'status', '')
+        is_assigned = self.safe_get(item, 'isAssigned', False)
 
         if status == "FINISHED":
             return "Назначено" if is_assigned else "Завершено"
@@ -227,10 +238,10 @@ class GosuslugiInspectionsParser(BaseAPIParser):
         status_map = {"CANCELLED": "Отменена", "PLANNED": "Запланирована"}
         result_status = status_map.get(status, status)
 
-        change_info = item.get('examinationChangeInfo') or {}
-        last_edit = item.get('lastEditingDate')
+        change_info = self.safe_get(item, 'examinationChangeInfo', {})
+        last_edit = self.safe_get(item, 'lastEditingDate', None)
 
-        reason = change_info.get('changingBase', {}).get('name', '') if change_info else ''
+        reason = self.safe_get(self.safe_get(change_info, 'changingBase', {}), 'name', '')
 
         if last_edit:
             try:
@@ -248,10 +259,11 @@ class GosuslugiInspectionsParser(BaseAPIParser):
         return result_status.strip()
 
     def format_result(self, item: Dict[str, Any]) -> str:
-        result = (item.get('examinationResult') or {}).get('desc', '')
-        has_offence = item.get('examinationResult', {}).get('hasOffence')
+        examination_result = self.safe_get(item, 'examinationResult', {})
+        result = self.safe_get(examination_result, 'desc', '')
+        has_offence = self.safe_get(examination_result, 'hasOffence', None)
         if has_offence is None:
-            has_offence = item.get('hasOffence')
+            has_offence = self.safe_get(item, 'hasOffence', None)
 
         if has_offence is True:
             return "Нарушения выявлены (в том числе факты невыполнения предписаний)"
@@ -260,31 +272,36 @@ class GosuslugiInspectionsParser(BaseAPIParser):
         return result
 
     def process_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
-        subject = item.get('subject', {}) or {}
-        org_info = subject.get('organizationInfoEnriched', {}) if subject else {}
-        registry = org_info.get('registryOrganizationCommonDetailWithNsi', {}) if org_info else {}
+        try:
+            subject = self.safe_get(item, 'subject', {})
+            org_info = self.safe_get(subject, 'organizationInfoEnriched', {})
+            registry = self.safe_get(org_info, 'registryOrganizationCommonDetailWithNsi', {})
+
+            entity_name = self.safe_get(registry, 'shortName', '')
+            ogrn = self.safe_get(registry, 'ogrn', '')
+            purpose = self.safe_get(item, 'examObjective', '')
+            status = self.format_status(item)
+            result = self.format_result(item)
+            examStartDate = self.safe_get(item, 'from', '')
+        except Exception as e:
+            logger.warning(f"Критическая ошибка при обработке элемента: {e} | item: {repr(item)}")
+            entity_name = ogrn = purpose = status = result = examStartDate = ''
 
         return {
-            'entity_name': registry.get('shortName', ''),
-            'ogrn': registry.get('ogrn', ''),
-            'purpose': item.get('examObjective', ''),
-            'status': self.format_status(item),
-            'result': self.format_result(item),
-            'examStartDate': item.get('from', '')
+            'entity_name': entity_name,
+            'ogrn': ogrn,
+            'purpose': purpose,
+            'status': status,
+            'result': result,
+            'examStartDate': examStartDate
         }
 
 
-def save_to_json(data: List[Dict], filename: str = 'inspections.json'):
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    logger.info(f"Данные сохранены в {filename}")
-
-
-def load_to_sqlite(data: List[Dict]):
+def load_to_sqlite(data: List[Dict], db_path: str = 'data/inspections.db'):
     try:
-        from load_to_sqlite import insert_data_from_list
-        logger.info("Загружаю данные в базу данных...")
-        insert_data_from_list(data)
+        loader = SqliteLoader(db_name=db_path)
+        logger.info(f"Загружаю данные в базу данных {db_path}...")
+        loader.insert_data_from_list(data)
         logger.info(f"Загружено {len(data)} записей в БД.")
     except Exception as e:
         logger.error(f"Ошибка при загрузке в БД: {e}")
@@ -295,7 +312,6 @@ def main(headers: Dict[str, str]):
     data = parser.run()
 
     if data:
-        save_to_json(data)
         load_to_sqlite(data)
     else:
         logger.warning("Нет данных для сохранения.")
