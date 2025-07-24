@@ -145,6 +145,9 @@ class BaseAPIParser(ABC):
 
                 processed_items = []
                 for item in items:
+                    if not isinstance(item, dict):
+                        logger.warning(f"Пропущен несловарный элемент: {item!r}")
+                        continue
                     try:
                         processed = self.process_item(item)
                         processed_items.append(processed)
