@@ -1,6 +1,6 @@
 # headers_extractor.py — Финальная ООП-версия
 
-from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
@@ -40,44 +40,43 @@ class BaseExtractor(ABC):
         pass
 
     @abstractmethod
-    def navigate_and_trigger(self):
+    async def navigate_and_trigger(self):
         """Определяет, как навигировать и запустить нужный запрос"""
         pass
 
-    def setup_browser(self):
+    async def setup_browser(self):
         """Запускает браузер и создаёт контекст"""
-        playwright = sync_playwright().start()
-        self.browser = playwright.chromium.launch(headless=self.headless)
-        self.context = self.browser.new_context(
+        self.playwright = await async_playwright().start()
+        self.browser = await self.playwright.chromium.launch(headless=self.headless)
+        self.context = await self.browser.new_context(
             viewport={'width': 1366, 'height': 768},
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                 "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             )
         )
-        self.page = self.context.new_page()
+        self.page = await self.context.new_page()
         logger.info("🌐 Браузер запущен")
 
-    def setup_route_handler(self):
+    async def setup_route_handler(self):
         """Настраивает перехват сетевых запросов"""
-        def handle_route(route, request):
+        async def handle_route(route, request):
             url = request.url.lower()
             keywords = [k.lower() for k in self.get_target_keywords()]
-
             if any(keyword in url for keyword in keywords) and request.method == "POST":
                 logger.info(f"🎯 Перехвачен целевой запрос: {request.url}")
                 self.captured_data["url"] = request.url
                 self.captured_data["headers"] = dict(request.headers)
-                self.captured_data["body"] = request.post_data
-            route.continue_()
+                self.captured_data["body"] = await request.post_data()
+            await route.continue_()
 
-        self.page.route("**/*", handle_route)
+        await self.page.route("**/*", handle_route)
         logger.info("🔧 Настроен перехват запросов")
 
-    def wait_for_api_response(self, timeout: int = 15000):
+    async def wait_for_api_response(self, timeout: int = 15000):
         """Ожидает ответа от API"""
         try:
-            self.page.wait_for_response(
+            await self.page.wait_for_response(
                 lambda resp: (
                     any(k.lower() in resp.url.lower() for k in self.get_target_keywords())
                     and resp.status == 200
@@ -88,26 +87,28 @@ class BaseExtractor(ABC):
         except Exception:
             logger.warning("⚠️ Не удалось дождаться ответа от API")
 
-    def close(self):
+    async def close(self):
         """Закрывает браузер"""
         if self.browser:
-            self.browser.close()
+            await self.browser.close()
             logger.info("🛑 Браузер закрыт")
+        if hasattr(self, 'playwright'):
+            await self.playwright.stop()
 
-    def run(self) -> Dict[str, Any]:
+    async def run(self) -> Dict[str, Any]:
         """
         Основной метод — шаблонный алгоритм (Template Method)
         """
         try:
-            self.setup_browser()
-            self.setup_route_handler()
+            await self.setup_browser()
+            await self.setup_route_handler()
 
             logger.info(f"🌐 Переход на {self.get_start_url()}")
-            self.page.goto(self.get_start_url(), wait_until="domcontentloaded", timeout=30000)
+            await self.page.goto(self.get_start_url(), wait_until="domcontentloaded", timeout=30000)
 
-            self.navigate_and_trigger()
+            await self.navigate_and_trigger()
 
-            self.wait_for_api_response()
+            await self.wait_for_api_response()
 
             return self.captured_data
 
@@ -115,7 +116,7 @@ class BaseExtractor(ABC):
             logger.error(f"❌ Ошибка: {e}")
             return self.captured_data
         finally:
-            self.close()
+            await self.close()
 
 
 class GosuslugiExtractor(BaseExtractor):
@@ -129,18 +130,19 @@ class GosuslugiExtractor(BaseExtractor):
     def get_start_url(self) -> str:
         return "https://dom.gosuslugi.ru/#!/rp"
 
-    def navigate_and_trigger(self):
+    async def navigate_and_trigger(self):
         logger.info("⏳ Ожидание кнопки 'Найти'...")
-        self.page.wait_for_selector("button:has-text('Найти')", timeout=15000)
+        await self.page.wait_for_selector("button:has-text('Найти')", timeout=15000)
         logger.info("🖱️ Кликаем по кнопке 'Найти'...")
-        self.page.click("button:has-text('Найти')")
+        await self.page.click("button:has-text('Найти')")
 
 
 def main():
     print("🚀 Запуск извлечения данных с dom.gosuslugi.ru (OOП версия)\n")
 
+    import asyncio
     extractor = GosuslugiExtractor(headless=False)
-    result = extractor.run()
+    result = asyncio.run(extractor.run())
 
     if result["headers"]:
         print("\n" + "=" * 60)
